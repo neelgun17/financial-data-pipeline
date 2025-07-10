@@ -1,0 +1,30 @@
+# .gitignore
+
+# General
+.DS_Store
+*.log
+*.tmp
+
+# IDE files
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Go build files
+*.exe
+*.out
+
+# Java build files
+target/
+*.class
+*.jar
+*.war
+
+# Environment variables
+# CRITICAL: Never commit your API keys or secrets!
+.env
+*.env
+
+# Docker
+docker-compose.override.yml
