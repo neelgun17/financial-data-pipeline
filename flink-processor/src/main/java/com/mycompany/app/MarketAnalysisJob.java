@@ -87,7 +87,7 @@ public class MarketAnalysisJob {
             .filter(tick -> tick != null);
         
 
-        ticks.print();
+        // ticks.print();
         // 5. The core processing logic: key, window, and apply analysis
         DataStream<AnalyzedTrend> analysis = ticks
                 // Key the stream by stock symbol. All ticks for "AAPL" go to one task, "GOOG" to another.
