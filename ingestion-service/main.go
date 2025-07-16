@@ -3,11 +3,18 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"log"
+	"maps"
 	"math/rand"
+	"os"
+	"os/signal"
+	"slices"
+	"syscall"
 	"time"
+
 	"github.com/confluentinc/confluent-kafka-go/v2/kafka"
 )
 
@@ -69,30 +76,47 @@ func main() {
 		}
 	}()
 
+	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer cancel()
+
+	go func() {
+		<-ctx.Done()
+		fmt.Print("Shutting down...")
+
+		p.Flush(15_000)
+		os.Exit(0)
+	}()
+
 	// 3. The main loop to produce messages
-	symbols := []string{"AAPL", "GOOG", "MSFT"}
+	symbols := slices.Collect(maps.Keys(stockPrices))
 	for {
-		// Pick a random stock symbol
-		symbol := symbols[rand.Intn(len(symbols))]
+		select{
+			case <-ctx.Done():
+				return
+			default:
+		
+			// Pick a random stock symbol
+			symbol := symbols[rand.Intn(len(symbols))]
 
-		// Generate the data
-		tick := generateFakeTick(symbol)
-		tickJSON, err := json.Marshal(tick)
-		if err != nil {
-			log.Printf("Failed to marshal tick to JSON: %s", err)
-			continue
-		}
+			// Generate the data
+			tick := generateFakeTick(symbol)
+			tickJSON, err := json.Marshal(tick)
+			if err != nil {
+				log.Printf("Failed to marshal tick to JSON: %s", err)
+				continue
+			}
 
-		// 4. Produce the message to the Kafka topic
-		// The key is very important! All messages with the same key are guaranteed
-		// to go to the same partition, preserving their order.
-		p.Produce(&kafka.Message{
-			TopicPartition: kafka.TopicPartition{Topic: &topic, Partition: kafka.PartitionAny},
-			Key:            []byte(tick.Symbol),
-			Value:          tickJSON,
-		}, nil)
+			// 4. Produce the message to the Kafka topic
+			// All messages with the same key are guaranteed
+			// to go to the same partition, preserving their order.
+			p.Produce(&kafka.Message{
+				TopicPartition: kafka.TopicPartition{Topic: &topic, Partition: kafka.PartitionAny},
+				Key:            []byte(tick.Symbol),
+				Value:          tickJSON,
+			}, nil)
 
-		// Wait for a second before producing the next message
-		time.Sleep(1 * time.Second)
+			// Wait for a second before producing the next message
+			time.Sleep(100 * time.Millisecond)
+			}
 	}
 }
