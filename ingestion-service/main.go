@@ -43,7 +43,7 @@ func generateFakeTick(symbol string) StockTick {
 		Symbol:    symbol,
 		Price:     newPrice,
 		Volume:    rand.Intn(1000) + 100,
-		Timestamp: time.Now(),
+		Timestamp: time.Now().UTC(),
 	}
 }
 
@@ -90,11 +90,11 @@ func main() {
 	// 3. The main loop to produce messages
 	symbols := slices.Collect(maps.Keys(stockPrices))
 	for {
-		select{
-			case <-ctx.Done():
-				return
-			default:
-		
+		select {
+		case <-ctx.Done():
+			return
+		default:
+
 			// Pick a random stock symbol
 			symbol := symbols[rand.Intn(len(symbols))]
 
@@ -117,6 +117,9 @@ func main() {
 
 			// Wait for a second before producing the next message
 			time.Sleep(100 * time.Millisecond)
-			}
+		}
 	}
 }
+
+// changes to add implement pulling data from API
+// split high volume index funds to have even distribution among partitions

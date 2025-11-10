@@ -1,7 +1,5 @@
 package com.mycompany.app;
 
-import org.apache.flink.shaded.jackson2.com.fasterxml.jackson.databind.ObjectMapper;
-import org.apache.flink.shaded.jackson2.com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import org.apache.flink.api.common.eventtime.WatermarkStrategy;
 import org.apache.flink.api.common.serialization.SimpleStringSchema;
 import org.apache.flink.connector.kafka.source.KafkaSource;
@@ -14,7 +12,6 @@ import org.apache.flink.streaming.api.windowing.windows.TimeWindow;
 import org.apache.flink.util.Collector;
 import org.apache.flink.api.java.functions.KeySelector;
 import org.apache.flink.streaming.api.functions.windowing.WindowFunction;
-import org.apache.flink.connector.kafka.sink.KafkaRecordSerializationSchema;
 import org.apache.flink.connector.kafka.sink.KafkaSink;
 
 
@@ -69,12 +66,34 @@ public class MarketAnalysisJob {
         // 4. Create the DataStream from the source
         DataStream<StockTick> ticks = env.fromSource(source, WatermarkStrategy.noWatermarks(), "Kafka Source")
             .map(jsonString -> {
-                // Use the shaded ObjectMapper as you discovered earlier
-                org.apache.flink.shaded.jackson2.com.fasterxml.jackson.databind.ObjectMapper mapper = 
-                    new org.apache.flink.shaded.jackson2.com.fasterxml.jackson.databind.ObjectMapper()
-                    .registerModule(new org.apache.flink.shaded.jackson2.com.fasterxml.jackson.datatype.jsr310.JavaTimeModule());
                 try {
-                    return mapper.readValue(jsonString, StockTick.class);
+                    // Parse JSON manually to handle timestamp format issues
+                    org.apache.flink.shaded.jackson2.com.fasterxml.jackson.databind.JsonNode rootNode = 
+                        new org.apache.flink.shaded.jackson2.com.fasterxml.jackson.databind.ObjectMapper().readTree(jsonString);
+                    
+                    StockTick tick = new StockTick();
+                    tick.symbol = rootNode.get("symbol").asText();
+                    tick.price = rootNode.get("price").asDouble();
+                    tick.volume = rootNode.get("volume").asInt();
+                    
+                    // Parse timestamp - handle both UTC (Z) and timezone offset formats
+                    String timestampStr = rootNode.get("timestamp").asText();
+                    try {
+                        // Try parsing as ISO-8601 with timezone offset (RFC3339)
+                        if (timestampStr.endsWith("Z")) {
+                            // UTC format
+                            tick.timestamp = java.time.Instant.parse(timestampStr);
+                        } else {
+                            // Has timezone offset - parse as ZonedDateTime then convert to Instant
+                            java.time.ZonedDateTime zdt = java.time.ZonedDateTime.parse(timestampStr);
+                            tick.timestamp = zdt.toInstant();
+                        }
+                    } catch (Exception e) {
+                        // Fallback: try parsing as Instant directly
+                        tick.timestamp = java.time.Instant.parse(timestampStr);
+                    }
+                    
+                    return tick;
                 } catch (Exception e) {
                     // !!! THIS IS THE CRITICAL PART !!!
                     // If there is a parsing error, we log it clearly and return null.
